@@ -1,37 +1,65 @@
 import { APIGatewayEvent } from "aws-lambda";
 import { S3, SNS } from "aws-sdk";
+import { Parser } from "json2csv";
 
 export async function sendMailToAdmin(event: APIGatewayEvent) {
   const topicArn = process.env.snsTopicArn;
   const bucketName = process.env.bucketName;
-  const sns = new SNS();
 
-  const s3 = new S3();
-
-  if (!bucketName) {
-    return;
+  if (!bucketName || !topicArn) {
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ message: "Something went wrong!" })
+    };
   }
 
-  const date = new Date().toDateString();
-  const body = JSON.parse(event?.body || "{}");
+  try {
+    const sns = new SNS();
 
-  const response = await s3
-    .upload({
-      Bucket: bucketName,
-      Key: `enquiries/${date}/${body.name}.json`
-    })
-    .promise();
+    const s3 = new S3();
 
-  console.log(response.Location);
-  await sns
-    .publish({
-      Subject: "The Topper Enquiry",
-      Message: JSON.stringify("New Enquiry received."),
-      TopicArn: topicArn
-    })
-    .promise();
-  return {
-    statusCode: 200,
-    body: JSON.stringify({ message: "Request Successfully Submitted." })
-  };
+    const date = new Date().toDateString();
+    const body = JSON.parse(event?.body || "{}");
+
+    if (!body.name) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({
+          message: "Missing required name property on body."
+        })
+      };
+    }
+
+    const parser = new Parser();
+    const csv = parser.parse(body);
+
+    const response = await s3
+      .upload({
+        Bucket: bucketName,
+        Key: `enquiries/${date}/${body.name}.csv`,
+        Body: csv,
+        ContentType: "text/csv"
+      })
+      .promise();
+
+    await sns
+      .publish({
+        Subject: "The Topper Enquiry",
+        Message: JSON.stringify(
+          `New Enquiry received. view it here: ${response.Location} `
+        ),
+        TopicArn: topicArn
+      })
+      .promise();
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ message: "Request Successfully Submitted." })
+    };
+  } catch (err) {
+    console.log(err);
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ message: "Something went wrong!" })
+    };
+  }
 }
