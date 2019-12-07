@@ -15,11 +15,14 @@ export async function sendMailToAdmin(event: APIGatewayEvent) {
   const date = new Date().toDateString();
   const body = JSON.parse(event?.body || "{}");
 
-  s3.upload({
-    Bucket: bucketName,
-    Key: `enquiries/${date}/${body.name}.json`
-  });
+  const response = await s3
+    .upload({
+      Bucket: bucketName,
+      Key: `enquiries/${date}/${body.name}.json`
+    })
+    .promise();
 
+  console.log(response.Location);
   await sns
     .publish({
       Subject: "The Topper Enquiry",
