@@ -1,8 +1,7 @@
-import { APIGatewayEvent } from "aws-lambda";
 import { S3, SNS } from "aws-sdk";
 import { Parser } from "json2csv";
 
-export async function sendMailToAdmin(event: APIGatewayEvent) {
+export async function sendMailToAdmin(event: any) {
   const topicArn = process.env.snsTopicArn;
   const bucketName = process.env.bucketName;
 
@@ -19,9 +18,8 @@ export async function sendMailToAdmin(event: APIGatewayEvent) {
     const s3 = new S3();
 
     const date = new Date().toDateString();
-    const body = JSON.parse(event?.body || "{}");
 
-    if (!body.name) {
+    if (!event.name) {
       return {
         statusCode: 400,
         body: JSON.stringify({
@@ -31,12 +29,12 @@ export async function sendMailToAdmin(event: APIGatewayEvent) {
     }
 
     const parser = new Parser();
-    const csv = parser.parse(body);
+    const csv = parser.parse(event);
 
     const response = await s3
       .upload({
         Bucket: bucketName,
-        Key: `enquiries/${date}/${body.name}.csv`,
+        Key: `enquiries/${date}/${event.name}.csv`,
         Body: csv,
         ContentType: "text/csv"
       })
